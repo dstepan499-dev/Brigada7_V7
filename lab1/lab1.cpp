@@ -3,9 +3,8 @@
 #include <chrono>
 #include <thread>
 #include <vector>
-#include <functional> // для std::ref
+#include <functional>
 
-// Подключение POSIX
 #define HAVE_STRUCT_TIMESPEC
 #include <pthread.h>
 #pragma comment(lib, "pthreadVCE2.lib")
@@ -28,7 +27,6 @@ void* right_rectangles_posix(void* arg) {
     PthreadArgs* args = static_cast<PthreadArgs*>(arg);
     double local_sum = 0.0;
 
-    // Метод правых прямоугольников: x_i = a + i * h, i от start_i до end_i
     for (int i = args->start_i; i <= args->end_i; ++i) {
         double x = args->a + i * args->h;
         local_sum += f(x);
@@ -95,7 +93,6 @@ double integrate_std_thread(int N, int T) {
 
     for (int k = 0; k < T; ++k) {
         int end_i = current_i + chunk - 1 + (k < remainder ? 1 : 0);
-        // Передаем параметры по отдельности, local_sum по ссылке через std::ref
         threads[k] = thread(right_rectangles_std, a, h, current_i, end_i, ref(local_sums[k]));
         current_i = end_i + 1;
     }
