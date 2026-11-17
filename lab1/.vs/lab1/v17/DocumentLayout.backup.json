@@ -1,9 +1,9 @@
 {
   "Version": 1,
-  "WorkspaceRootPath": "D:\\sem5\\lab1\\",
+  "WorkspaceRootPath": "D:\\Brigada7_V7\\lab1\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{22B55200-A1DC-486D-968D-6AA24A0CF717}|lab1.vcxproj|D:\\sem5\\lab1\\lab1.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
+      "AbsoluteMoniker": "D:0:0:{22B55200-A1DC-486D-968D-6AA24A0CF717}|lab1.vcxproj|D:\\Brigada7_V7\\lab1\\lab1.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}",
       "RelativeMoniker": "D:0:0:{22B55200-A1DC-486D-968D-6AA24A0CF717}|lab1.vcxproj|solutionrelative:lab1.cpp||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     }
   ],
@@ -24,11 +24,11 @@
               "$type": "Document",
               "DocumentIndex": 0,
               "Title": "lab1.cpp",
-              "DocumentMoniker": "D:\\sem5\\lab1\\lab1.cpp",
+              "DocumentMoniker": "D:\\Brigada7_V7\\lab1\\lab1.cpp",
               "RelativeDocumentMoniker": "lab1.cpp",
-              "ToolTip": "D:\\sem5\\lab1\\lab1.cpp",
+              "ToolTip": "D:\\Brigada7_V7\\lab1\\lab1.cpp",
               "RelativeToolTip": "lab1.cpp",
-              "ViewState": "AgIAAAAAAAAAAAAAAAAAABUAAAAkAAAAAAAAAA==",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABAAAAABAAAAAAAAAA==",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000677|",
               "WhenOpened": "2026-10-07T06:58:24.643Z",
               "EditorCaption": ""

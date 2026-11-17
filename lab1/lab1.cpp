@@ -3,7 +3,7 @@
 #include <chrono>
 #include <thread>
 #include <vector>
-#include <functional>
+#include <iomanip>
 
 #define HAVE_STRUCT_TIMESPEC
 #include <pthread.h>
@@ -12,7 +12,7 @@
 using namespace std;
 using namespace std::chrono;
 
-double f(double x) {
+inline double f(double x) {
     return pow(x + 1.0, 2.0) / sqrt(log(x));
 }
 
@@ -32,8 +32,9 @@ void* right_rectangles_posix(void* arg) {
         local_sum += f(x);
     }
 
+    // Возврат значения через динамическую память согласно лекции
     double* result = new double(local_sum * args->h);
-    return result;
+    return static_cast<void*>(result);
 }
 
 double integrate_posix(int N, int T) {
@@ -41,8 +42,8 @@ double integrate_posix(int N, int T) {
     double h = (b - a) / N;
     double total_sum = 0.0;
 
-    pthread_t* threads = new pthread_t[T];
-    PthreadArgs* args = new PthreadArgs[T];
+    vector<pthread_t> threads(T);
+    vector<PthreadArgs> args(T);
 
     int chunk = N / T;
     int remainder = N % T;
@@ -59,24 +60,25 @@ double integrate_posix(int N, int T) {
     }
 
     for (int k = 0; k < T; ++k) {
-        void* ptr;
+        void* ptr = nullptr;
         pthread_join(threads[k], &ptr);
-        total_sum += *static_cast<double*>(ptr);
-        delete static_cast<double*>(ptr);
+        if (ptr) {
+            total_sum += *static_cast<double*>(ptr);
+            delete static_cast<double*>(ptr);
+        }
     }
 
-    delete[] threads;
-    delete[] args;
     return total_sum;
 }
 
-void right_rectangles_std(double a, double h, int start_i, int end_i, double& local_sum) {
-    local_sum = 0.0;
+// Параметры передаются по отдельности, промежуточная сумма считается в локальной переменной
+void right_rectangles_std(double a, double h, int start_i, int end_i, double* out_sum) {
+    double local_sum = 0.0; // Локально! Решает проблему False Sharing
     for (int i = start_i; i <= end_i; ++i) {
         double x = a + i * h;
         local_sum += f(x);
     }
-    local_sum *= h;
+    *out_sum = local_sum * h; // Запись в общую память ровно один раз
 }
 
 double integrate_std_thread(int N, int T) {
@@ -93,7 +95,8 @@ double integrate_std_thread(int N, int T) {
 
     for (int k = 0; k < T; ++k) {
         int end_i = current_i + chunk - 1 + (k < remainder ? 1 : 0);
-        threads[k] = thread(right_rectangles_std, a, h, current_i, end_i, ref(local_sums[k]));
+        // Передача аргументов по отдельности без объединения в структуру
+        threads[k] = thread(right_rectangles_std, a, h, current_i, end_i, &local_sums[k]);
         current_i = end_i + 1;
     }
 
@@ -116,43 +119,82 @@ int main() {
     cout << "Введите максимальное количество потоков для тестирования: ";
     cin >> max_T;
 
-    auto start_single = high_resolution_clock::now();
-    double result_single = integrate_posix(N, 1);
-    auto end_single = high_resolution_clock::now();
-    double time_single = duration_cast<microseconds>(end_single - start_single).count() / 1000.0;
+    cout << fixed << setprecision(6);
 
-    cout << "\n--- Однопоточный режим ---\n";
-    cout << "Результат: " << result_single << "\n";
-    cout << "Время: " << time_single << " мс\n";
+    auto start_1 = high_resolution_clock::now();
+    double res_1 = integrate_posix(N, 1);
+    auto end_1 = high_resolution_clock::now();
+    double time_1 = duration_cast<microseconds>(end_1 - start_1).count() / 1000.0;
 
-    // Тестирование POSIX
-    cout << "\n--- POSIX Threads ---\n";
+    cout << "\nОднопоточный режим\n";
+    cout << "Результат: " << res_1 << "\n";
+    cout << "Время:     " << time_1 << " мс\n";
+
+    // Расчет через POSIX на T потоках
+    auto start_posix_T = high_resolution_clock::now();
+    double res_posix_T = integrate_posix(N, T);
+    auto end_posix_T = high_resolution_clock::now();
+    double time_posix_T = duration_cast<microseconds>(end_posix_T - start_posix_T).count() / 1000.0;
+
+    // Расчет через std::thread на T потоках
+    auto start_std_T = high_resolution_clock::now();
+    double res_std_T = integrate_std_thread(N, T);
+    auto end_std_T = high_resolution_clock::now();
+    double time_std_T = duration_cast<microseconds>(end_std_T - start_std_T).count() / 1000.0;
+
+    cout << "\n Основной многопоточный расчет (T = " << T << " потоков) \n";
+    cout << "POSIX Threads:\n";
+    cout << "  Результат: " << res_posix_T << "\n";
+    cout << "  Время:     " << time_posix_T << " мс\n";
+    cout << "  Ускорение: " << (time_1 / time_posix_T) << "x\n";
+
+    cout << "std::thread:\n";
+    cout << "  Результат: " << res_std_T << "\n";
+    cout << "  Время:     " << time_std_T << " мс\n";
+    cout << "  Ускорение: " << (time_1 / time_std_T) << "x\n";
+    cout << "\n";
+
+    vector<double> time_posix(max_T + 1, 0.0);
+    vector<double> time_std(max_T + 1, 0.0);
+    vector<double> res_posix(max_T + 1, 0.0);
+    vector<double> res_std(max_T + 1, 0.0);
+
+    // Тестирование POSIX Threads
+    cout << "\nТестирование POSIX Threads\n";
     cout << "Потоки | Время (мс) | Ускорение | Эффективность (%) | Результат\n";
     for (int t = 1; t <= max_T; ++t) {
         auto start = high_resolution_clock::now();
-        double res = integrate_posix(N, t);
+        res_posix[t] = integrate_posix(N, t);
         auto end = high_resolution_clock::now();
-        double time = duration_cast<microseconds>(end - start).count() / 1000.0;
+        time_posix[t] = duration_cast<microseconds>(end - start).count() / 1000.0;
 
-        double speedup = time_single / time;
-        double efficiency = (speedup / t) * 100.0;
+        double speedup = (t == 1) ? 1.0 : (time_posix[1] / time_posix[t]);
+        double eff = (speedup / t) * 100.0;
 
-        cout << t << "      | " << time << "   | " << speedup << "      | " << efficiency << "             | " << res << "\n";
+        cout << setw(6) << t << " | "
+            << setw(10) << fixed << setprecision(2) << time_posix[t] << " | "
+            << setw(9) << fixed << setprecision(4) << speedup << " | "
+            << setw(17) << fixed << setprecision(2) << eff << " | "
+            << setprecision(6) << res_posix[t] << "\n";
     }
 
     // Тестирование std::thread
-    cout << "\n--- std::thread ---\n";
+    cout << "\nТестирование std::thread\n";
     cout << "Потоки | Время (мс) | Ускорение | Эффективность (%) | Результат\n";
     for (int t = 1; t <= max_T; ++t) {
         auto start = high_resolution_clock::now();
-        double res = integrate_std_thread(N, t);
+        res_std[t] = integrate_std_thread(N, t);
         auto end = high_resolution_clock::now();
-        double time = duration_cast<microseconds>(end - start).count() / 1000.0;
+        time_std[t] = duration_cast<microseconds>(end - start).count() / 1000.0;
 
-        double speedup = time_single / time;
-        double efficiency = (speedup / t) * 100.0;
+        double speedup = (t == 1) ? 1.0 : (time_std[1] / time_std[t]);
+        double eff = (speedup / t) * 100.0;
 
-        cout << t << "      | " << time << "   | " << speedup << "      | " << efficiency << "             | " << res << "\n";
+        cout << setw(6) << t << " | "
+            << setw(10) << fixed << setprecision(2) << time_std[t] << " | "
+            << setw(9) << fixed << setprecision(4) << speedup << " | "
+            << setw(17) << fixed << setprecision(2) << eff << " | "
+            << setprecision(6) << res_std[t] << "\n";
     }
 
     system("pause");
